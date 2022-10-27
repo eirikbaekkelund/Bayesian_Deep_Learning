@@ -182,8 +182,8 @@ class MonteCarlo:
                                              X=self.observed_toss[:,None]).exp()
 
         plt.plot(domain, posterior, linestyle='--', label='$P(\mu | X)$')
-        plt.axvline(x=np.mean(self.mu_chain), color='red', label='MCMC $\mu$')
-        plt.axvline(x=np.mean(self.observed_toss.numpy()), color= 'black', label='Observed $\mu$')
+        plt.axvline(x=np.mean(self.mu_chain), label='MCMC $\mu$')
+        plt.axvline(x=np.mean(self.observed_toss.numpy()), label='Observed $\mu$')
         plt.xlim(0, 1)
         plt.xlabel("$\mu$")
         plt.ylabel("$p(\mu | x_1,\dots,x_N)$")
