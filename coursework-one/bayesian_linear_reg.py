@@ -17,7 +17,7 @@ def predict_probs_MAP(Phi, w):
     """
     return torch.sigmoid(Phi @ w)
 
-def log_joint(Phi, y, w, sigma=10):
+def log_joint1(Phi, y, w, sigma=10):
     """
     Compute the joint probability of the data and the latent variables.
     
@@ -37,12 +37,10 @@ def log_joint(Phi, y, w, sigma=10):
     log_prior_w = dist.MultivariateNormal(loc=torch.zeros(Phi.shape[-1]), covariance_matrix=sigma*torch.eye(Phi.shape[-1]) ).log_prob(w)
     #log_likelihood = dist.Bernoulli(predict_probs_MAP(Phi, w)).log_prob(y).sum(0)
    
-    #return log_prior_w + predict_probs_MAP(Phi, w).sum(0)
-
     return predict_probs_MAP(Phi, w).sum(0) + log_prior_w
 
-def loss(weights, Phi, y):
-    return torch.sum(y @ torch.log(torch.where(torch.sigmoid(Phi @ weights) > 0.5, 1, 0))  + (1 - y) @ torch.log(1 - torch.where(torch.sigmoid(Phi @ weights) > 0.5, 1, 0)) ) 
+# def loss(weights, Phi, y):
+#     return torch.sum(y @ torch.log(torch.where(torch.sigmoid(Phi @ weights) > 0.5, 1, 0))  + (1 - y) @ torch.log(1 - torch.where(torch.sigmoid(Phi @ weights) > 0.5, 1, 0)) ) 
 
 def find_MAP(Phi, y):
     """
@@ -64,22 +62,22 @@ def find_MAP(Phi, y):
 
     weights_dist = torch.distributions.Normal(loc=0, scale=10)
     weights = torch.tensor( weights_dist.sample((Phi.shape[-1],)), requires_grad=True )
-    print(weights)
+    
     losses = []
     
     epochs = 30
-    optimizer = torch.optim.SGD((weights, ), lr=0.1, momentum=0.8)
+    optimizer = torch.optim.SGD((weights, ), lr=0.01, momentum=0.8)
     
     for _ in range(epochs):
         optimizer.zero_grad()
 
         # forward pass
-        func = log_joint(Phi, y, weights)
+        func = log_joint1(Phi, y, weights)
         # backward pass
         func.backward()
         #print( predict_probs_MAP(Phi, weights))
         optimizer.step()
-        losses.append(torch.exp(log_joint(Phi, y, weights)).detach().numpy() )
+        losses.append( -log_joint1(Phi, y, weights).detach().numpy() )
     
     return weights.detach(), losses
 
