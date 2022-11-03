@@ -190,10 +190,3 @@ class MonteCarlo:
         plt.title("MCMC histogram of posterior");
         plt.legend()
         plt.show()
-
-        
-
-        
-        
-        
-        
