@@ -1,9 +1,11 @@
+import sys
+sys.settrace
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
-import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.distributions as dist
+os.path.a
 
 def predict_probs_MAP(Phi, w):
     """
@@ -19,7 +21,7 @@ def predict_probs_MAP(Phi, w):
     """
     return torch.sigmoid(Phi @ w)
 
-def log_joint1(Phi, y, w, sigma=10):
+def log_joint(Phi, y, w, sigma=10):
     """
     Compute the joint probability of the data and the latent variables.
     
@@ -37,12 +39,16 @@ def log_joint1(Phi, y, w, sigma=10):
         
     """
     log_prior_w = dist.MultivariateNormal(loc=torch.zeros(Phi.shape[-1]), covariance_matrix=sigma*torch.eye(Phi.shape[-1]) ).log_prob(w)
-    #log_likelihood = dist.Bernoulli(predict_probs_MAP(Phi, w)).log_prob(y).sum(0)
-   
-    return predict_probs_MAP(Phi, w).sum(0) + log_prior_w
+    
+    y_hat = predict_probs_MAP(Phi,w)
+    log_prob_y = torch.FloatTensor(sum([dist.Bernoulli(torch.FloatTensor.float((y_hat[i]))).log_prob(torch.FloatTensor.float( y[i]),  ) for i in range(len(y_hat))]) )
+    print(log_prob_y)
+    print(log_prior_w)
+    return log_prob_y + log_prior_w
 
 # def loss(weights, Phi, y):
 #     return torch.sum(y @ torch.log(torch.where(torch.sigmoid(Phi @ weights) > 0.5, 1, 0))  + (1 - y) @ torch.log(1 - torch.where(torch.sigmoid(Phi @ weights) > 0.5, 1, 0)) ) 
+
 
 def find_MAP(Phi, y):
     """
@@ -62,24 +68,23 @@ def find_MAP(Phi, y):
              diagnose convergence.
     """
 
-    weights_dist = torch.distributions.Normal(loc=0, scale=10)
-    weights = torch.tensor( weights_dist.sample((Phi.shape[-1],)), requires_grad=True )
+    weights = torch.ones(size=(Phi.shape[-1],)).requires_grad_(True)
+    #weights = torch.tensor( weights_dist.sample((Phi.shape[-1],)), requires_grad=True )
     
     losses = []
     
-    epochs = 30
-    optimizer = torch.optim.SGD((weights, ), lr=0.01, momentum=0.8)
+    epochs = 100
+    optimizer = torch.optim.SGD((weights, Phi, y), lr=0.005, momentum=0.3)
     
     for _ in range(epochs):
         optimizer.zero_grad()
-
         # forward pass
-        func = log_joint1(Phi, y, weights)
+        loss = -log_joint(Phi, y, weights)
         # backward pass
-        func.backward()
-        #print( predict_probs_MAP(Phi, weights))
-        optimizer.step()
-        losses.append( -log_joint1(Phi, y, weights).detach().numpy() )
+        loss.backward()
+        optimizer.step()            
+        
+        losses.append( loss.item())
     
     return weights.detach(), losses
 
