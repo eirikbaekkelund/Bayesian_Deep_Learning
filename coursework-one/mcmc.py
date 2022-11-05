@@ -1,9 +1,10 @@
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.distributions as dist
-import os
-os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+
 
 measurements = torch.FloatTensor([-27.020, 3.570, 8.191, 9.898, 9.603, 9.945, 10.056])
 
