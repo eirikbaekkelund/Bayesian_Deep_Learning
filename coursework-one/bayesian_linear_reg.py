@@ -5,7 +5,9 @@ os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 import matplotlib.pyplot as plt
 import torch
 import torch.distributions as dist
-os.path.a
+
+measurements = torch.FloatTensor([-27.020, 3.570, 8.191, 9.898, 9.603, 9.945, 10.056])
+
 
 def predict_probs_MAP(Phi, w):
     """
@@ -46,10 +48,6 @@ def log_joint(Phi, y, w, sigma=10):
     print(log_prior_w)
     return log_prob_y + log_prior_w
 
-# def loss(weights, Phi, y):
-#     return torch.sum(y @ torch.log(torch.where(torch.sigmoid(Phi @ weights) > 0.5, 1, 0))  + (1 - y) @ torch.log(1 - torch.where(torch.sigmoid(Phi @ weights) > 0.5, 1, 0)) ) 
-
-
 def find_MAP(Phi, y):
     """
     Find the MAP estimate of the log_joint method.
@@ -88,8 +86,83 @@ def find_MAP(Phi, y):
     
     return weights.detach(), losses
 
+def get_mcmc_proposal(mu, sigma):
+    """
+    INPUT:
+    mu    : scalar
+    sigma : tensor, vector of length 7. Should have sigma > 0
+
+    OUTPUT:
+    q_mu    : instance of Distribution class, that defines a proposal for mu
+    q_sigma : instance of Distribution class, that defines a proposal for sigma
+    """
+    assert sigma.shape == (7,)
+    assert( torch.any(sigma > 0))
+    assert(mu.shape == ())
+    print(mu.shape, sigma.shape)   
+
+    q_sigma = dist.MultivariateNormal(loc=sigma, 
+                                      covariance_matrix= torch.eye(sigma.shape[0]))
+    q_mu = dist.Normal(loc=mu, scale=torch.mean(sigma))
+    return q_mu, q_sigma
+
+def mcmc_step(mu, sigma, alpha=50, beta=0.5):
+    """
+    mu    : scalar
+    sigma : tensor, vector of length 7. Should have sigma > 0
+    alpha : scalar, standard deviation of Gaussian prior on mu. Default to 50
+    beta  : scalar, rate of exponential prior on sigma_i. Default to 0.5
+
+    OUTPUT:
+    mu       : the next value of mu in the MCMC chain
+    sigma    : the next value of sigma in the MCMC chain
+    accepted : a boolean value, indicating whether the proposal was accepted
+
+    """
+    
+    accepted = False
+    q_mu, q_sigma = get_mcmc_proposal(mu, sigma)
+    
+    new_mu = q_mu.sample()
+    new_sigma = q_sigma.sample()
+
+    p_new = log_joint(new_mu, new_sigma)
+    p_old = log_joint(mu, sigma)
+
+    if p_new - p_old > torch.rand(1).log().item():
+        accepted = True
+        return new_mu, new_sigma, accepted
+    else:
+        return mu, sigma, accepted
+
+def run_mcmc(N_iters, mu_init, sigma_init):
+    """ Run an MCMC algorithm for a fixed number of iterations """
+    
+    mu_chain = [mu_init]
+    sigma_chain = [sigma_init]
+    N_accepted = 0
+    for _ in range(N_iters):
+        mu, sigma, accepted = mcmc_step(mu_chain[-1], sigma_chain[-1])
+        mu_chain.append(mu)
+        sigma_chain.append(sigma)
+        N_accepted += accepted
+    
+    return torch.stack(mu_chain), torch.stack(sigma_chain), N_accepted / N_iters
+
+def algo_parameters():
+    """ TODO: set these to appropriate values:
+    
+    OUTPUT:
+    N_samples : total number of MCMC steps
+    N_burnin  : number of initial steps to discard
+    """   
+    N_samples = 1000
+    N_burnin = int(N_samples/4)
+    return N_samples, N_burnin
+
 
 if __name__ == "__main__":
+    print(os.path.abspath('data.pt'))
     X_train, y_train, X_test, y_test = torch.load("data.pt")
 
     def features_simple(X):
@@ -108,3 +181,30 @@ if __name__ == "__main__":
     plt.xlabel("Iteration")
     plt.ylabel("Loss");
     plt.show()
+    q_mu, q_sigma = get_mcmc_proposal(torch.tensor(9.0), torch.ones(7))
+    assert isinstance(q_mu, dist.Distribution)
+    assert isinstance(q_sigma, dist.Distribution)
+    assert q_mu.sample().shape == ()
+    assert q_sigma.sample().shape == (7,)
+
+
+    mu_init = measurements.mean()
+    sigma_init = torch.ones(7)
+
+    N_samples, N_burnin = algo_parameters()
+
+    mu_chain, sigma_chain, accepted = run_mcmc(N_samples, mu_init, sigma_init)
+    print("acceptance rate:", accepted)
+    plt.plot(mu_chain);
+    plt.xlabel("MCMC iteration");
+    plt.ylabel("$\mu$")
+    plt.figure();
+    plt.hist(mu_chain[N_burnin:].numpy(), bins=20);
+    plt.xlabel("$\mu$")
+    plt.ylabel("Counts");
+
+    plt.figure(figsize=(12,4));
+    plt.plot(sigma_chain)
+    plt.legend(range(1,8));
+    plt.xlabel("MCMC iteration")
+    plt.ylabel("$\sigma_i$");
